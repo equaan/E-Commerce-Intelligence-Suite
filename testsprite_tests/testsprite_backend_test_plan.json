@@ -1,0 +1,42 @@
+[
+  {
+    "id": "TC001",
+    "title": "test_home_dashboard_display",
+    "description": "Verify that the home dashboard API endpoint '/' returns a 200 status code and displays business metrics, daily sales trends, top products, and actionable insights correctly within 5 seconds for datasets up to 100,000 rows."
+  },
+  {
+    "id": "TC002",
+    "title": "test_cross_selling_recommendations",
+    "description": "Test the '/cross-selling' GET endpoint with valid product query parameter and optional min_support and min_confidence parameters to ensure it returns product recommendations with correct confidence, lift, and support metrics."
+  },
+  {
+    "id": "TC003",
+    "title": "test_inventory_forecast_generation",
+    "description": "Validate the '/forecast' POST endpoint by sending a valid product_id and forecast_days within allowed range (7 to 90) and verify that the response contains forecast results including predictions, confidence intervals, and stock recommendations."
+  },
+  {
+    "id": "TC004",
+    "title": "test_data_upload_and_validation",
+    "description": "Test the '/upload' POST endpoint by uploading a CSV file with valid sales data and verify that the system validates the schema, processes the data correctly, and returns a 200 status code. Also test with invalid data to ensure a 400 error is returned with appropriate validation error messages."
+  },
+  {
+    "id": "TC005",
+    "title": "test_get_sales_data",
+    "description": "Verify the '/data/sales' GET endpoint returns sales data including product, customer, and date information with a 200 status code."
+  },
+  {
+    "id": "TC006",
+    "title": "test_get_product_list",
+    "description": "Test the '/data/products' GET endpoint to ensure it returns a list of all products with their descriptions and a 200 status code."
+  },
+  {
+    "id": "TC007",
+    "title": "test_frequent_itemsets_finder",
+    "description": "Validate the '/analysis/frequent-itemsets' POST endpoint by sending a JSON payload with min_support and transactions array and verify that it returns frequent itemsets with correct support values."
+  },
+  {
+    "id": "TC008",
+    "title": "test_arima_forecast_generation",
+    "description": "Test the '/forecast/arima' POST endpoint by providing product_id, time_series_data with date and quantity, and forecast_steps, and verify that the response contains forecast predictions and confidence intervals."
+  }
+]

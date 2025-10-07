@@ -1,0 +1,21 @@
+# Virtual Environment
+.venv/
+virtualenv/
+env/
+
+# Data files
+*.xlsx
+*.csv
+*.db
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# OS-specific
+.DS_Store
+
+# TestSprite generated files to ignore
+testsprite_tests/tmp/
+testsprite_tests/*.py
+!testsprite_tests/__init__.py
