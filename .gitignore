@@ -2,20 +2,90 @@
 .venv/
 virtualenv/
 env/
+venv/
 
-# Data files
+# Data files (users will have their own)
 *.xlsx
-*.csv
+*.xls
+data/*.csv
+data/*.db
+!data/sample_retail_data.csv  # Keep sample data
+
+# Database files
 *.db
+*.sqlite
+*.sqlite3
 
 # Python cache
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
 
 # OS-specific
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# TestSprite generated files to ignore
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# TestSprite generated files
 testsprite_tests/tmp/
 testsprite_tests/*.py
 !testsprite_tests/__init__.py
+
+# Logs
+*.log
+logs/
+
+# User configuration (optional - users might want to version their config)
+# config.py
