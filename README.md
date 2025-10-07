@@ -17,20 +17,49 @@ A powerful Streamlit-based analytics dashboard that helps e-commerce managers ma
 
 ### 🎯 Setup 
 
+1. **Clone the Repository and naviagte to project directory:**
 ```bash
 git clone https://github.com/equaan/E-Commerce-Intelligence-Suite.git
 cd E-Commerce-Intelligence-Suite
+```
+2. **Create a virtual environment:**
+```bash
+python -m venv venv
+venv\Scripts\activate        # On Windows
+source venv/bin/activate     # On macOS/Linux
+```
+3. **Run the setup wizard:**
+```bash
 python setup.py
 ```
+🧩 What Happens Next
+1. The setup script will:    
+    ✅ Check Python version
+    ✅ Install all required dependencies
+    ✅ Configure your CSV file path
+    ✅ Initialize the database and start the app
+   
+2. ⚠️ Important:
+While installing dependencies, the process may pause for a few minutes.
+    - Wait patiently — it’s downloading libraries in the background.
+    - If it seems stuck for too long, open a new terminal and run:
+      ```bash
+      python setup.py
+      ```
+      again. The setup will continue from where it left off.
+      
+3. Once dependencies are installed, a data/ folder will be created.
+    - Move your CSV file into that folder.
+    - When prompted, enter the path as:
+      ```bash
+      data/your_file_name.csv
+      ```
+    - The setup will automatically detect the file, validate it, and begin initialization.
+4. If initialization fails, the script will show manual recovery steps — just follow those instructions and re-run the command.
 
-The interactive setup wizard will:
-- ✅ Check your Python version
-- ✅ Install all dependencies automatically
-- ✅ Help you configure your CSV file path
-- ✅ Initialize the database with your data
-- ✅ Optionally start the application
+5. After successful initialization, the app will automatically launch in your browser.
 
-
+    
 
 ## 📊 CSV Data Requirements
 
