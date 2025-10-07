@@ -328,5 +328,3 @@ This project is for educational purposes as part of a Data Warehouse and Mining 
 **Built with ❤️ for smarter e-commerce decisions**
 
 For questions or support, refer to the PRD.md file for detailed specifications and requirements.
-#   E - C o m m e r c e - I n t e l l i g e n c e - S u i t e  
- 
