@@ -17,11 +17,6 @@ A powerful Streamlit-based analytics dashboard that helps e-commerce managers ma
 
 ### 🎯 Setup Options
 
-Choose your preferred setup method:
-
-#### **Option 1: Automated Setup (Recommended) 🤖**
-
-For beginners or quick setup:
 
 ```bash
 git clone https://github.com/equaan/E-Commerce-Intelligence-Suite.git
@@ -36,40 +31,7 @@ The interactive setup wizard will:
 - ✅ Initialize the database with your data
 - ✅ Optionally start the application
 
-#### **Option 2: Manual Setup (Advanced) ⚙️**
 
-For users who prefer manual control:
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/equaan/E-Commerce-Intelligence-Suite.git
-   cd E-Commerce-Intelligence-Suite
-   ```
-
-2. **Install required packages**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Configure your data source**
-   - Open `config.py` in a text editor
-   - Update `CSV_FILE_PATH` to point to your CSV file:
-   ```python
-   CSV_FILE_PATH = "path/to/your/sales_data.csv"
-   ```
-   - If your CSV has different column names, update `COLUMN_MAPPING` accordingly
-
-4. **Initialize the database with your data**
-   ```bash
-   python initialize_data.py
-   ```
-
-5. **Run the Streamlit application**
-   ```bash
-   streamlit run app.py
-   ```
-
-6. **Open your browser** to the provided URL (usually http://localhost:8501)
 
 ## 📊 CSV Data Requirements
 
