@@ -34,10 +34,10 @@ python setup.py
 ```
 🧩 What Happens Next
 1. The setup script will:    
-    ✅ Check Python version
-    ✅ Install all required dependencies
-    ✅ Configure your CSV file path
-    ✅ Initialize the database and start the app
+    - ✅ Check Python version
+    - ✅ Install all required dependencies
+    - ✅ Configure your CSV file path
+    - ✅ Initialize the database and start the app
    
 2. ⚠️ Important:
 While installing dependencies, the process may pause for a few minutes.
