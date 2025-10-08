@@ -72,18 +72,16 @@ class CacheManager:
             
             # Save with compression if requested
             if compress:
-                with gzip.open(cache_path, 'wb') as f:
-                    pickle.dump(result, f)
+                with gzip.open(cache_path, 'wb', compresslevel=6) as f:  # Moderate compression for speed
+                    pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
             else:
                 with open(cache_path, 'wb') as f:
-                    pickle.dump(result, f)
+                    pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
             
             # Log the cache save
             self._log_cache_operation("SAVE", algorithm, params_hash, params)
             
-            # Force garbage collection to free memory
-            del result
-            gc.collect()
+            print(f"💾 Cached {algorithm} result ({params_hash[:8]}...)")
             
             return True
             

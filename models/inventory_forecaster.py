@@ -30,18 +30,24 @@ class InventoryForecaster:
         Prepare time series data for a specific product
         
         Args:
-            df: DataFrame with columns ['Date', 'StockCode', 'Quantity']
+            df: DataFrame with columns ['Date', 'ProductID'/'StockCode', 'Quantity']
             product_id: Product ID to forecast
         """
+        # Handle both ProductID and StockCode columns
+        product_col = 'StockCode' if 'StockCode' in df.columns else 'ProductID'
+        
         # Filter data for specific product
-        product_data = df[df['StockCode'] == product_id].copy()
+        product_data = df[df[product_col] == product_id].copy()
         
         if len(product_data) == 0:
             return None
         
+        # Handle different date column names
+        date_col = 'Date' if 'Date' in product_data.columns else 'DateID'
+        
         # Sort by date and set as index
-        product_data = product_data.sort_values('Date')
-        product_data.set_index('Date', inplace=True)
+        product_data = product_data.sort_values(date_col)
+        product_data.set_index(date_col, inplace=True)
         
         # Ensure daily frequency and fill missing dates
         product_data = product_data.asfreq('D', fill_value=0)
@@ -356,8 +362,9 @@ class InventoryForecaster:
         """
         print(f"📊 Analyzing top {top_n} products for demand forecasting...")
         
-        # Get top products by historical sales
-        top_products = (df.groupby(['StockCode', 'Description'])['Quantity']
+        # Get top products by historical sales - handle both StockCode and ProductID
+        product_col = 'StockCode' if 'StockCode' in df.columns else 'ProductID'
+        top_products = (df.groupby([product_col, 'Description'])['Quantity']
                        .sum()
                        .sort_values(ascending=False)
                        .head(top_n * 2)  # Get more to account for failed forecasts
@@ -397,7 +404,7 @@ class InventoryForecaster:
                         priority = "Monitor"
                     
                     forecast_results.append({
-                        'StockCode': stock_code,
+                        'ProductID': stock_code,  # Use ProductID to match database schema
                         'Description': description,
                         'Total_Forecasted_Demand': round(total_forecasted_demand, 1),
                         'Avg_Daily_Demand': round(avg_daily_demand, 1),

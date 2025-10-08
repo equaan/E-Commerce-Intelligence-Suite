@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import sys
 import os
+import psutil
 from datetime import datetime, timedelta
 
 # Add modules to path
@@ -59,63 +60,28 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_data
 def load_data():
-    """Load data from database with caching"""
-    try:
-        db = DatabaseManager()
-        data = db.get_sales_data()
-        products = db.get_product_list()
-        db.close()
-        return data, products
-    except Exception as e:
-        st.error(f"Error loading data: {str(e)}")
-        return None, None
+    """Load data from database with lightweight caching"""
+    # Use session state for lightweight caching instead of heavy st.cache_data
+    if 'cached_data' not in st.session_state or 'cached_products' not in st.session_state:
+        try:
+            db = DatabaseManager()
+            data = db.get_sales_data()
+            products = db.get_product_list()
+            db.close()
+            
+            # Store in session state for this session only
+            st.session_state.cached_data = data
+            st.session_state.cached_products = products
+            
+            return data, products
+        except Exception as e:
+            st.error(f"Error loading data: {str(e)}")
+            return None, None
+    else:
+        return st.session_state.cached_data, st.session_state.cached_products
 
-@st.cache_data
-def initialize_market_basket_analyzer(data, min_support, min_confidence, min_lift):
-    """Initialize and run market basket analysis with caching based on parameters"""
-    try:
-        analyzer = MarketBasketAnalyzer(min_support=min_support, min_confidence=min_confidence, min_lift=min_lift)
-        analyzer.prepare_transactions(data[['InvoiceNo', 'Description']])
-        analyzer.find_frequent_itemsets()
-        analyzer.generate_association_rules()
-        return analyzer
-    except Exception as e:
-        st.error(f"Error in market basket analysis: {str(e)}")
-        return None
-
-@st.cache_data
-def prepare_time_series_data_cached(data_hash):
-    """Prepare time series data with caching"""
-    try:
-        data, _ = load_data()
-        processor = DataProcessor()
-        return processor.prepare_time_series_data(data)
-    except Exception as e:
-        st.error(f"Error preparing time series data: {str(e)}")
-        return None
-
-@st.cache_data
-def train_forecasting_model_cached(product_id, forecast_days, data_hash):
-    """Train forecasting model with caching based on product and parameters"""
-    try:
-        data, _ = load_data()
-        processor = DataProcessor()
-        ts_data = processor.prepare_time_series_data(data)
-        
-        forecaster = InventoryForecaster()
-        forecaster.prepare_product_data(ts_data, product_id)
-        result = forecaster.train_arima_model(product_id, forecast_days)
-        
-        if result:
-            summary = forecaster.get_forecast_summary(product_id)
-            chart_data = forecaster.get_forecast_chart_data(product_id, 60)
-            return result, summary, chart_data, forecaster
-        return None, None, None, None
-    except Exception as e:
-        st.error(f"Error in forecasting: {str(e)}")
-        return None, None, None, None
+# Removed heavy caching functions - now using disk-based caching in models
 
 def main():
     """Main application function"""
@@ -154,11 +120,34 @@ def main():
             else:
                 st.sidebar.error("Failed to clear cache")
     
+    # Memory usage indicator
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("💾 Memory Usage")
+    try:
+        process = psutil.Process()
+        memory_mb = process.memory_info().rss / 1024 / 1024
+        memory_percent = process.memory_percent()
+        
+        st.sidebar.metric("RAM Usage (MB)", f"{memory_mb:.1f}")
+        st.sidebar.metric("RAM Usage (%)", f"{memory_percent:.1f}%")
+        
+        if memory_percent > 80:
+            st.sidebar.error("⚠️ High memory usage!")
+        elif memory_percent > 60:
+            st.sidebar.warning("⚠️ Moderate memory usage")
+    except:
+        st.sidebar.info("Memory stats unavailable")
+    
     # Clean up memory when switching pages
     if 'current_page' not in st.session_state:
         st.session_state.current_page = page
     elif st.session_state.current_page != page:
         st.session_state.current_page = page
+        # Clear heavy data from session state when switching pages
+        if 'cached_data' in st.session_state:
+            del st.session_state.cached_data
+        if 'cached_products' in st.session_state:
+            del st.session_state.cached_products
         cleanup_memory()
     
     # Load data
@@ -516,11 +505,11 @@ def show_forecasting_page(data, products):
                     
                     # Display the results table
                     st.dataframe(
-                        top_products_df[['StockCode', 'Description', 'Total_Forecasted_Demand', 
+                        top_products_df[['ProductID', 'Description', 'Total_Forecasted_Demand', 
                                        'Avg_Daily_Demand', 'Peak_Demand', 'Priority', 'Recommendation']],
                         use_container_width=True,
                         column_config={
-                            "StockCode": "Product ID",
+                            "ProductID": "Product ID",
                             "Description": "Product Name",
                             "Total_Forecasted_Demand": st.column_config.NumberColumn(
                                 "Total Demand",
