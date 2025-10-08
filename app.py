@@ -232,26 +232,34 @@ def show_cross_selling_page(data, products):
     st.header("🛒 Cross-Selling Engine")
     st.write("Discover which products are frequently bought together to boost your sales!")
     
-    # Sidebar controls
-    st.sidebar.subheader("🎛️ Analysis Settings")
-    min_support = st.sidebar.slider("Minimum Support", 0.001, 0.1, 0.01, 0.001)
-    min_confidence = st.sidebar.slider("Minimum Confidence", 0.1, 0.9, 0.1, 0.05)
-    min_lift = st.sidebar.slider("Minimum Lift", 1.0, 5.0, 1.0, 0.1)
+    # Move analysis settings to main page for better UX
+    st.subheader("🎛️ Analysis Settings")
+    st.write("Adjust these parameters to find the right balance between speed and detail for your business needs.")
     
-    # Phase 4.1: Advanced optimization controls
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("⚡ Performance Settings")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        min_support = st.slider("Minimum Support", 0.001, 0.1, 0.01, 0.001,
+                               help="Lower values find more associations but take longer")
+    with col2:
+        min_confidence = st.slider("Minimum Confidence", 0.1, 0.9, 0.1, 0.05,
+                                  help="Higher values show stronger relationships")
+    with col3:
+        min_lift = st.slider("Minimum Lift", 1.0, 5.0, 1.0, 0.1,
+                            help="Values > 1.0 show positive associations")
     
-    with st.sidebar.expander("🔧 Advanced Options"):
-        max_transactions = st.slider("Max Transactions", 1000, 50000, 10000, 1000,
-                                   help="Limit transactions for faster analysis")
-        max_products = st.slider("Max Products", 50, 1000, 200, 50,
-                                help="Analyze only top N most frequent products")
-        min_basket_size = st.slider("Min Basket Size", 1, 10, 2, 1,
-                                   help="Minimum items per transaction")
-        
-        if st.button("🔄 Apply Optimization Settings"):
-            st.session_state.optimization_updated = True
+    # Advanced settings in an expandable section
+    with st.expander("⚡ Performance Settings (Advanced Users)"):
+        st.write("Fine-tune performance for large datasets:")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            max_transactions = st.slider("Max Transactions", 1000, 50000, 10000, 1000,
+                                       help="Limit transactions for faster analysis")
+        with col2:
+            max_products = st.slider("Max Products", 50, 1000, 200, 50,
+                                    help="Analyze only top N most frequent products")
+        with col3:
+            min_basket_size = st.slider("Min Basket Size", 1, 10, 2, 1,
+                                       help="Minimum items per transaction")
     
     # Initialize market basket analyzer with caching and custom optimization settings
     analyzer = MarketBasketAnalyzer(min_support, min_confidence, min_lift)
@@ -265,45 +273,32 @@ def show_cross_selling_page(data, products):
             max_transaction_items=50  # Keep reasonable upper limit
         )
     
-    # Phase 4.1: Progressive loading with better UX
-    progress_placeholder = st.empty()
-    status_placeholder = st.empty()
-    
-    with st.spinner("🔄 Running Market Basket Analysis..."):
-        # Show optimization settings
-        with st.expander("⚙️ Optimization Settings", expanded=False):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Max Transactions", analyzer.max_transactions)
-                st.metric("Max Products", analyzer.max_products)
-            with col2:
-                st.metric("Min Items/Transaction", analyzer.min_transaction_items)
-                st.metric("Max Items/Transaction", analyzer.max_transaction_items)
-        
-        # Run analysis with progress tracking
+    # Run analysis with clean UX
+    with st.spinner("🔄 Analyzing product associations..."):
         frequent_itemsets, rules, from_cache = analyzer.run_cached_analysis(data)
         
         if from_cache:
-            st.success("✅ Loaded cached result - Analysis completed instantly!")
+            st.success("✅ Analysis loaded from cache!")
         else:
-            st.success("✅ Analysis completed with Phase 4.1 optimizations!")
-            
-            # Show performance summary
-            summary = analyzer.get_analysis_summary()
-            if summary:
-                st.info(f"📊 Processed {summary['total_transactions']} transactions with {summary['unique_products']} products")
+            st.success("✅ Analysis complete!")
     
     if frequent_itemsets is None or len(frequent_itemsets) == 0:
-        st.error("Failed to generate frequent itemsets. Try lowering the minimum support.")
+        st.error("No product associations found. Try lowering the minimum support threshold.")
         return
     
-    # Product selection
-    st.subheader("🔍 Product Recommendations")
-    selected_product = st.selectbox(
-        "Select a product to get cross-selling recommendations:",
-        options=products['Description'].tolist(),
-        index=0
-    )
+    # Create tabs for better organization
+    tab1, tab2 = st.tabs(["🎯 Product Recommendations", "📊 Association Rules"])
+    
+    with tab1:
+        # Product selection
+        st.subheader("🔍 Get Cross-Selling Recommendations")
+        st.write("Select a product to see what customers typically buy together with it:")
+        
+        selected_product = st.selectbox(
+            "Choose a product:",
+            options=products['Description'].tolist(),
+            index=0
+        )
     
     if selected_product:
         # Get recommendations
@@ -364,26 +359,28 @@ def show_cross_selling_page(data, products):
         else:
             st.warning(f"⚠️ No recommendations found for '{selected_product}'. Try adjusting the analysis settings.")
     
-    # Top association rules
-    st.subheader("🏆 Top Association Rules")
-    
-    if rules is not None and len(rules) > 0:
-        # Display top rules directly from the rules DataFrame
-        display_rules = rules.head(10).copy()
-        display_rules = display_rules[['antecedents_str', 'consequents_str', 'confidence', 'lift', 'support']]
-        display_rules.columns = ['Antecedent (If)', 'Consequent (Then)', 'Confidence', 'Lift', 'Support']
+    with tab2:
+        # Top association rules
+        st.subheader("🏆 Top Association Rules")
+        st.write("These rules show the strongest product associations in your data:")
         
-        # Format the values for better display
-        display_rules['Confidence'] = display_rules['Confidence'].round(3)
-        display_rules['Lift'] = display_rules['Lift'].round(3)
-        display_rules['Support'] = display_rules['Support'].round(3)
-        
-        st.dataframe(display_rules, use_container_width=True)
-        
-        # Show rule interpretation
-        st.info("💡 **How to read these rules:** If a customer buys the Antecedent product(s), they are likely to also buy the Consequent product(s). Higher Confidence, Lift, and Support indicate stronger associations.")
-    else:
-        st.warning("⚠️ No association rules found with current settings. Try lowering the minimum support, confidence, or lift thresholds.")
+        if rules is not None and len(rules) > 0:
+            # Display top rules directly from the rules DataFrame
+            display_rules = rules.head(10).copy()
+            display_rules = display_rules[['antecedents_str', 'consequents_str', 'confidence', 'lift', 'support']]
+            display_rules.columns = ['Antecedent (If)', 'Consequent (Then)', 'Confidence', 'Lift', 'Support']
+            
+            # Format the values for better display
+            display_rules['Confidence'] = display_rules['Confidence'].round(3)
+            display_rules['Lift'] = display_rules['Lift'].round(3)
+            display_rules['Support'] = display_rules['Support'].round(3)
+            
+            st.dataframe(display_rules, use_container_width=True)
+            
+            # Show rule interpretation
+            st.info("💡 **How to read these rules:** If a customer buys the Antecedent product(s), they are likely to also buy the Consequent product(s). Higher Confidence, Lift, and Support indicate stronger associations.")
+        else:
+            st.warning("⚠️ No association rules found with current settings. Try lowering the minimum support, confidence, or lift thresholds.")
     
     # Analysis summary
     summary = analyzer.get_analysis_summary()

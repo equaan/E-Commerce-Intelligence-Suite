@@ -45,9 +45,12 @@ class InventoryForecaster:
         # Handle different date column names
         date_col = 'Date' if 'Date' in product_data.columns else 'DateID'
         
-        # Sort by date and set as index
-        product_data = product_data.sort_values(date_col)
-        product_data.set_index(date_col, inplace=True)
+        # Convert date column to datetime if it's not already
+        if not pd.api.types.is_datetime64_any_dtype(product_data[date_col]):
+            product_data[date_col] = pd.to_datetime(product_data[date_col])
+        
+        # Sort by date and aggregate duplicates (sum quantities for same date)
+        product_data = product_data.groupby(date_col)['Quantity'].sum().to_frame()
         
         # Ensure daily frequency and fill missing dates
         product_data = product_data.asfreq('D', fill_value=0)
