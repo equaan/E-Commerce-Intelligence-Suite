@@ -86,24 +86,30 @@ def update_config_file(csv_path):
     print(f"\n⚙️ Updating configuration with CSV path: {csv_path}")
     
     try:
-        # Read current config
-        with open('config.py', 'r') as f:
+        # Read current config (UTF-8 safe for emojis)
+        with open('config.py', 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Update CSV_FILE_PATH
+        # Update CSV_FILE_PATH line
         lines = content.split('\n')
+        updated = False
         for i, line in enumerate(lines):
             if line.strip().startswith('CSV_FILE_PATH = '):
                 lines[i] = f'CSV_FILE_PATH = "{csv_path}"'
+                updated = True
                 break
         
-        # Write updated config
-        with open('config.py', 'w') as f:
+        if not updated:
+            # If the variable isn't found, append it at the top
+            lines.insert(0, f'CSV_FILE_PATH = "{csv_path}"')
+
+        # Write updated config (UTF-8 again)
+        with open('config.py', 'w', encoding='utf-8') as f:
             f.write('\n'.join(lines))
         
         print("✅ Configuration updated successfully!")
         return True
-        
+
     except Exception as e:
         print(f"❌ Error updating configuration: {str(e)}")
         return False
