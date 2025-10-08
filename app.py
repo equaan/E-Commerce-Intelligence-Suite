@@ -202,7 +202,7 @@ def show_home_page(data):
         fig = px.line(daily_sales, x='DateID', y='TotalPrice', 
                      title="Daily Revenue Trend")
         fig.update_layout(xaxis_title="Date", yaxis_title="Revenue ($)")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     with col2:
         st.subheader("🏆 Top 10 Products by Revenue")
@@ -211,7 +211,7 @@ def show_home_page(data):
         fig = px.bar(x=top_products.values, y=top_products.index, orientation='h',
                     title="Top Products by Revenue")
         fig.update_layout(xaxis_title="Revenue ($)", yaxis_title="Product")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     # Insights
     st.markdown('<div class="insight-box">', unsafe_allow_html=True)
@@ -354,7 +354,7 @@ def show_cross_selling_page(data, products):
                 
                 fig.update_layout(height=400, showlegend=False)
                 fig.update_xaxes(tickangle=45)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
         
         else:
             st.warning(f"⚠️ No recommendations found for '{selected_product}'. Try adjusting the analysis settings.")
@@ -375,7 +375,7 @@ def show_cross_selling_page(data, products):
             display_rules['Lift'] = display_rules['Lift'].round(3)
             display_rules['Support'] = display_rules['Support'].round(3)
             
-            st.dataframe(display_rules, use_container_width=True)
+            st.dataframe(display_rules, width='stretch')
             
             # Show rule interpretation
             st.info("💡 **How to read these rules:** If a customer buys the Antecedent product(s), they are likely to also buy the Consequent product(s). Higher Confidence, Lift, and Support indicate stronger associations.")
@@ -498,7 +498,7 @@ def show_forecasting_page(data, products):
                             hovermode='x unified'
                         )
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width='stretch')
                     
                     # Insights
                     st.subheader("💡 Actionable Insights")
@@ -548,7 +548,7 @@ def show_forecasting_page(data, products):
                     st.dataframe(
                         top_products_df[['ProductID', 'Description', 'Total_Forecasted_Demand', 
                                        'Avg_Daily_Demand', 'Peak_Demand', 'Priority', 'Recommendation']],
-                        use_container_width=True,
+                        width='stretch',
                         column_config={
                             "ProductID": "Product ID",
                             "Description": "Product Name",
@@ -608,7 +608,7 @@ def show_forecasting_page(data, products):
                                 'Monitor': '#cccccc'
                             }
                         )
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width='stretch')
                     
                 else:
                     st.error("❌ Failed to generate forecasts. Please check your data quality.")
@@ -634,7 +634,7 @@ def show_upload_page():
     
     sample_columns = ['InvoiceNo', 'StockCode', 'Description', 'Quantity', 'InvoiceDate', 'UnitPrice', 'CustomerID']
     sample_df = pd.DataFrame({col: [f"Sample {col}"] for col in sample_columns})
-    st.dataframe(sample_df, use_container_width=True)
+    st.dataframe(sample_df, width='stretch')
     
     # Download sample
     if st.button("📥 Download Sample CSV"):
@@ -664,7 +664,7 @@ def show_upload_page():
                 
                 # Show data preview
                 st.subheader("👀 Data Preview")
-                st.dataframe(df.head(10), use_container_width=True)
+                st.dataframe(df.head(10), width='stretch')
                 
                 # Process and analyze
                 if st.button("🚀 Process and Analyze Data", type="primary"):
