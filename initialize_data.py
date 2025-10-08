@@ -40,9 +40,10 @@ def validate_csv_file(file_path):
         return False
     
     try:
-        # Read first few rows to check structure
-        df_sample = pd.read_csv(file_path, nrows=5)
-        print(f"✅ CSV file found with {len(df_sample.columns)} columns")
+        # Use utility function for encoding detection
+        processor = DataProcessor()
+        df_sample, detected_encoding = processor.read_csv_with_encoding_detection(file_path, nrows=5)
+        print(f"✅ CSV file found with {len(df_sample.columns)} columns (encoding: {detected_encoding})")
         print(f"   Columns: {list(df_sample.columns)}")
         
         # Check if required columns can be mapped
@@ -70,9 +71,10 @@ def load_and_map_csv(file_path):
     print("📖 Loading and mapping CSV data...")
     
     try:
-        # Load the full CSV file
-        df = pd.read_csv(file_path)
-        print(f"   Loaded {len(df)} rows from CSV")
+        # Use utility function for encoding detection
+        processor = DataProcessor()
+        df, detected_encoding = processor.read_csv_with_encoding_detection(file_path)
+        print(f"   Loaded {len(df)} rows from CSV (encoding: {detected_encoding})")
         
         # Map columns to standard names
         reverse_mapping = {v: k for k, v in COLUMN_MAPPING.items()}

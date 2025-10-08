@@ -8,6 +8,13 @@ import numpy as np
 from mlxtend.frequent_patterns import apriori, association_rules
 from mlxtend.preprocessing import TransactionEncoder
 import warnings
+import sys
+import os
+
+# Add utils to path for cache manager
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
+from cache_manager import load_result, save_result, cleanup_memory
+
 warnings.filterwarnings('ignore')
 
 class MarketBasketAnalyzer:
@@ -80,6 +87,57 @@ class MarketBasketAnalyzer:
         
         return self.frequent_itemsets
     
+    def run_cached_analysis(self, df, data_hash=None):
+        """
+        Run complete MBA analysis with caching support
+        
+        Args:
+            df: Transaction DataFrame
+            data_hash: Optional hash of the data for cache key
+            
+        Returns:
+            Tuple of (frequent_itemsets, association_rules, from_cache)
+        """
+        # Create cache parameters
+        cache_params = {
+            'min_support': self.min_support,
+            'min_confidence': self.min_confidence,
+            'min_lift': self.min_lift,
+            'data_shape': df.shape,
+            'data_hash': data_hash or str(hash(str(df.values.tobytes()))),
+            'unique_products': df['Description'].nunique() if 'Description' in df.columns else 0
+        }
+        
+        # Try to load from cache
+        cached_result = load_result("mba_results", cache_params)
+        if cached_result is not None:
+            print("✅ Loaded MBA results from cache")
+            self.frequent_itemsets = cached_result['frequent_itemsets']
+            self.rules = cached_result['rules']
+            self.transaction_data = cached_result.get('transaction_data')
+            return self.frequent_itemsets, self.rules, True
+        
+        print("⚠️ Computing MBA analysis... Please wait.")
+        
+        # Run the analysis
+        self.prepare_transactions(df)
+        frequent_itemsets = self.find_frequent_itemsets()
+        rules = self.generate_association_rules()
+        
+        # Save to cache
+        result_to_cache = {
+            'frequent_itemsets': frequent_itemsets,
+            'rules': rules,
+            'transaction_data': self.transaction_data
+        }
+        
+        save_result("mba_results", cache_params, result_to_cache)
+        
+        # Clean up memory
+        cleanup_memory()
+        
+        return frequent_itemsets, rules, False
+
     def generate_association_rules(self):
         """Generate association rules from frequent itemsets"""
         if self.frequent_itemsets is None or len(self.frequent_itemsets) == 0:

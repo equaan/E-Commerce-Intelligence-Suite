@@ -18,6 +18,7 @@ sys.path.append('models')
 
 from utils.database_setup import DatabaseManager
 from utils.data_processing import DataProcessor
+from utils.cache_manager import clear_cache, get_cache_stats, cleanup_memory
 from models.market_basket import MarketBasketAnalyzer
 from models.inventory_forecaster import InventoryForecaster
 
@@ -134,6 +135,32 @@ def main():
         ["🏠 Home", "🛒 Cross-Selling Engine", "📈 Inventory Forecaster", "📤 Upload Data"]
     )
     
+    # Cache management section
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🗄️ Cache Management")
+    
+    cache_stats = get_cache_stats()
+    if cache_stats.get('error'):
+        st.sidebar.error("Cache stats unavailable")
+    else:
+        st.sidebar.metric("MBA Cache Files", cache_stats.get('mba_cache_files', 0))
+        st.sidebar.metric("ARIMA Cache Files", cache_stats.get('arima_cache_files', 0))
+        st.sidebar.metric("Cache Size (MB)", cache_stats.get('total_cache_size_mb', 0))
+        
+        if st.sidebar.button("🗑️ Clear All Cache"):
+            if clear_cache():
+                st.sidebar.success("Cache cleared!")
+                cleanup_memory()
+            else:
+                st.sidebar.error("Failed to clear cache")
+    
+    # Clean up memory when switching pages
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = page
+    elif st.session_state.current_page != page:
+        st.session_state.current_page = page
+        cleanup_memory()
+    
     # Load data
     data, products = load_data()
     
@@ -222,22 +249,19 @@ def show_cross_selling_page(data, products):
     min_confidence = st.sidebar.slider("Minimum Confidence", 0.1, 0.9, 0.1, 0.05)
     min_lift = st.sidebar.slider("Minimum Lift", 1.0, 5.0, 1.0, 0.1)
     
-    # Check if settings changed
-    current_params = (min_support, min_confidence, min_lift)
-    params_changed = st.session_state.last_analysis_params.get('cross_selling') != current_params
+    # Initialize market basket analyzer with caching
+    analyzer = MarketBasketAnalyzer(min_support, min_confidence, min_lift)
     
-    if params_changed:
-        st.session_state.last_analysis_params['cross_selling'] = current_params
-        status_msg = "🔄 Analyzing with new settings..."
-    else:
-        status_msg = "⚡ Loading cached analysis..."
+    with st.spinner("🔄 Running Market Basket Analysis..."):
+        frequent_itemsets, rules, from_cache = analyzer.run_cached_analysis(data)
+        
+        if from_cache:
+            st.info("✅ Loaded cached result")
+        else:
+            st.warning("⚠️ Recomputing model... Please wait.")
     
-    # Initialize market basket analyzer with current settings (cached)
-    with st.spinner(status_msg):
-        analyzer = initialize_market_basket_analyzer(data, min_support, min_confidence, min_lift)
-    
-    if analyzer is None:
-        st.error("Failed to initialize market basket analysis")
+    if frequent_itemsets is None or len(frequent_itemsets) == 0:
+        st.error("Failed to generate frequent itemsets. Try lowering the minimum support.")
         return
     
     # Product selection
@@ -309,16 +333,24 @@ def show_cross_selling_page(data, products):
     
     # Top association rules
     st.subheader("🏆 Top Association Rules")
-    top_rules = analyzer.get_top_rules(top_n=10)
     
-    if top_rules:
-        rules_df = pd.DataFrame(top_rules)
-        st.dataframe(
-            rules_df[['antecedent', 'consequent', 'confidence', 'lift', 'support']],
-            use_container_width=True
-        )
+    if rules is not None and len(rules) > 0:
+        # Display top rules directly from the rules DataFrame
+        display_rules = rules.head(10).copy()
+        display_rules = display_rules[['antecedents_str', 'consequents_str', 'confidence', 'lift', 'support']]
+        display_rules.columns = ['Antecedent (If)', 'Consequent (Then)', 'Confidence', 'Lift', 'Support']
+        
+        # Format the values for better display
+        display_rules['Confidence'] = display_rules['Confidence'].round(3)
+        display_rules['Lift'] = display_rules['Lift'].round(3)
+        display_rules['Support'] = display_rules['Support'].round(3)
+        
+        st.dataframe(display_rules, use_container_width=True)
+        
+        # Show rule interpretation
+        st.info("💡 **How to read these rules:** If a customer buys the Antecedent product(s), they are likely to also buy the Consequent product(s). Higher Confidence, Lift, and Support indicate stronger associations.")
     else:
-        st.info("No association rules found with current settings. Try lowering the thresholds.")
+        st.warning("⚠️ No association rules found with current settings. Try lowering the minimum support, confidence, or lift thresholds.")
     
     # Analysis summary
     summary = analyzer.get_analysis_summary()
@@ -337,114 +369,222 @@ def show_forecasting_page(data, products):
     st.header("📈 Inventory Forecaster")
     st.write("Predict future demand to optimize your inventory levels!")
     
-    # Product selection
-    st.subheader("🎯 Select Product for Forecasting")
-    selected_product_id = st.selectbox(
-        "Choose a product:",
-        options=products['ProductID'].tolist(),
-        format_func=lambda x: f"{x} - {products[products['ProductID']==x]['Description'].iloc[0]}"
-    )
+    # Create tabs for different views
+    tab1, tab2 = st.tabs(["🎯 Individual Product Forecast", "🏆 Top Forecasted Products"])
     
-    # Forecast parameters
-    col1, col2 = st.columns(2)
-    with col1:
-        forecast_days = st.slider("Forecast Period (days)", 7, 90, 30)
-    with col2:
-        history_days = st.slider("Historical Data to Show (days)", 30, 180, 60)
+    with tab1:
+        # Product selection
+        st.subheader("🎯 Select Product for Forecasting")
+        selected_product_id = st.selectbox(
+            "Choose a product:",
+            options=products['ProductID'].tolist(),
+            format_func=lambda x: f"{x} - {products[products['ProductID']==x]['Description'].iloc[0]}"
+        )
+        
+        # Forecast parameters
+        col1, col2 = st.columns(2)
+        with col1:
+            forecast_days = st.slider("Forecast Period (days)", 7, 90, 30)
+        with col2:
+            history_days = st.slider("Historical Data to Show (days)", 30, 180, 60)
+        
+        if st.button("🔮 Generate Forecast", type="primary"):
+            # Initialize forecaster with caching
+            forecaster = InventoryForecaster()
+            
+            with st.spinner("🔄 Running ARIMA forecasting..."):
+                # Use cached forecasting
+                forecast_result, from_cache = forecaster.run_cached_forecast(
+                    data, selected_product_id, forecast_days
+                )
+                
+                if from_cache:
+                    st.info("✅ Loaded cached result")
+                else:
+                    st.warning("⚠️ Recomputing model... Please wait.")
+                
+                if forecast_result:
+                    st.success("✅ Forecast generated successfully!")
+                    
+                    # Get summary and chart data
+                    summary = forecaster.get_forecast_summary(selected_product_id)
+                    chart_data = forecaster.get_forecast_chart_data(selected_product_id, history_days)
+                    
+                    # Display key metrics
+                    st.subheader("📊 Forecast Summary")
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("Avg Historical Demand", f"{summary['avg_historical_demand']:.1f}")
+                    with col2:
+                        st.metric("Avg Forecast Demand", f"{summary['avg_forecast_demand']:.1f}")
+                    with col3:
+                        st.metric("Total Forecast Demand", f"{summary['total_forecast_demand']:.0f}")
+                    with col4:
+                        st.metric("Recommended Stock", f"{summary['recommended_stock_level']:.0f}")
+                    
+                    # Trend indicator
+                    trend_color = "🟢" if summary['trend'] == "increasing" else "🔴"
+                    st.markdown(f"**Trend**: {trend_color} {summary['trend'].title()} ({summary['change_percent']:+.1f}%)")
+                    
+                    # Forecast chart
+                    st.subheader("📈 Demand Forecast Chart")
+                    
+                    if chart_data:
+                        fig = go.Figure()
+                        
+                        # Historical data
+                        fig.add_trace(go.Scatter(
+                            x=chart_data['historical_dates'],
+                            y=chart_data['historical_values'],
+                            mode='lines+markers',
+                            name='Historical Demand',
+                            line=dict(color='#1f77b4')
+                        ))
+                        
+                        # Forecast data
+                        fig.add_trace(go.Scatter(
+                            x=chart_data['forecast_dates'],
+                            y=chart_data['forecast_values'],
+                            mode='lines+markers',
+                            name='Forecast',
+                            line=dict(color='#ff7f0e', dash='dash')
+                        ))
+                        
+                        # Confidence interval
+                        fig.add_trace(go.Scatter(
+                            x=chart_data['forecast_dates'] + chart_data['forecast_dates'][::-1],
+                            y=chart_data['forecast_upper'] + chart_data['forecast_lower'][::-1],
+                            fill='toself',
+                            fillcolor='rgba(255,127,14,0.2)',
+                            line=dict(color='rgba(255,255,255,0)'),
+                            name='Confidence Interval'
+                        ))
+                        
+                        fig.update_layout(
+                            title=f"Demand Forecast for {selected_product_id}",
+                            xaxis_title="Date",
+                            yaxis_title="Quantity",
+                            hovermode='x unified'
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Insights
+                    st.subheader("💡 Actionable Insights")
+                    for insight in summary['insights']:
+                        st.info(insight)
+                    
+                    # Model accuracy
+                    if summary.get('model_accuracy'):
+                        st.subheader("🎯 Model Accuracy")
+                        accuracy_color = "🟢" if summary['model_accuracy'] < 20 else "🟡" if summary['model_accuracy'] < 40 else "🔴"
+                        st.markdown(f"**MAPE**: {accuracy_color} {summary['model_accuracy']:.1f}%")
+                        
+                        if summary['model_accuracy'] < 20:
+                            st.success("Excellent forecast accuracy!")
+                        elif summary['model_accuracy'] < 40:
+                            st.warning("Moderate forecast accuracy. Consider using additional data.")
+                        else:
+                            st.error("Low forecast accuracy. Results should be used with caution.")
+                
+                else:
+                    st.error("❌ Failed to generate forecast. This product may have insufficient data.")
     
-    if st.button("🔮 Generate Forecast", type="primary"):
-        with st.spinner("🔄 Training forecasting model..."):
-            # Create a hash of the data for caching
-            data_hash = hash(str(data.shape) + str(data.columns.tolist()))
+    with tab2:
+        # Top forecasted products for restocking
+        st.subheader("🏆 Top Products for Restocking (Next 30 Days)")
+        st.write("Products with highest forecasted demand - prioritize these for inventory restocking!")
+        
+        # Parameters for top products analysis
+        col1, col2 = st.columns(2)
+        with col1:
+            top_n = st.slider("Number of products to analyze", 5, 20, 10)
+        with col2:
+            forecast_period = st.slider("Forecast period (days)", 7, 60, 30)
+        
+        if st.button("📊 Generate Top Products Forecast", type="primary"):
+            forecaster = InventoryForecaster()
             
-            # Use cached forecasting
-            forecast_result, summary, chart_data, forecaster = train_forecasting_model_cached(
-                selected_product_id, forecast_days, data_hash
-            )
-            
-            if forecast_result and summary:
-                st.success("✅ Forecast generated successfully!")
+            with st.spinner(f"🔄 Analyzing top {top_n} products for demand forecasting..."):
+                top_products_df = forecaster.get_top_forecasted_products(
+                    data, top_n=top_n, forecast_days=forecast_period
+                )
                 
-                # Display key metrics
-                st.subheader("📊 Forecast Summary")
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.metric("Avg Historical Demand", f"{summary['avg_historical_demand']:.1f}")
-                with col2:
-                    st.metric("Avg Forecast Demand", f"{summary['avg_forecast_demand']:.1f}")
-                with col3:
-                    st.metric("Total Forecast Demand", f"{summary['total_forecast_demand']:.0f}")
-                with col4:
-                    st.metric("Recommended Stock", f"{summary['recommended_stock_level']:.0f}")
-                
-                # Trend indicator
-                trend_color = "🟢" if summary['trend'] == "increasing" else "🔴"
-                st.markdown(f"**Trend**: {trend_color} {summary['trend'].title()} ({summary['change_percent']:+.1f}%)")
-                
-                # Forecast chart
-                st.subheader("📈 Demand Forecast Chart")
-                
-                if chart_data:
-                    fig = go.Figure()
+                if not top_products_df.empty:
+                    st.success(f"✅ Generated forecasts for {len(top_products_df)} products!")
                     
-                    # Historical data
-                    fig.add_trace(go.Scatter(
-                        x=chart_data['historical_dates'],
-                        y=chart_data['historical_values'],
-                        mode='lines+markers',
-                        name='Historical Demand',
-                        line=dict(color='#1f77b4')
-                    ))
-                    
-                    # Forecast data
-                    fig.add_trace(go.Scatter(
-                        x=chart_data['forecast_dates'],
-                        y=chart_data['forecast_values'],
-                        mode='lines+markers',
-                        name='Forecast',
-                        line=dict(color='#ff7f0e', dash='dash')
-                    ))
-                    
-                    # Confidence interval
-                    fig.add_trace(go.Scatter(
-                        x=chart_data['forecast_dates'] + chart_data['forecast_dates'][::-1],
-                        y=chart_data['forecast_upper'] + chart_data['forecast_lower'][::-1],
-                        fill='toself',
-                        fillcolor='rgba(255,127,14,0.2)',
-                        line=dict(color='rgba(255,255,255,0)'),
-                        name='Confidence Interval'
-                    ))
-                    
-                    fig.update_layout(
-                        title=f"Demand Forecast for {selected_product_id}",
-                        xaxis_title="Date",
-                        yaxis_title="Quantity",
-                        hovermode='x unified'
+                    # Display the results table
+                    st.dataframe(
+                        top_products_df[['StockCode', 'Description', 'Total_Forecasted_Demand', 
+                                       'Avg_Daily_Demand', 'Peak_Demand', 'Priority', 'Recommendation']],
+                        use_container_width=True,
+                        column_config={
+                            "StockCode": "Product ID",
+                            "Description": "Product Name",
+                            "Total_Forecasted_Demand": st.column_config.NumberColumn(
+                                "Total Demand",
+                                help="Total forecasted demand for the period",
+                                format="%.1f"
+                            ),
+                            "Avg_Daily_Demand": st.column_config.NumberColumn(
+                                "Daily Avg",
+                                help="Average daily demand",
+                                format="%.1f"
+                            ),
+                            "Peak_Demand": st.column_config.NumberColumn(
+                                "Peak Demand",
+                                help="Highest single day demand",
+                                format="%.1f"
+                            ),
+                            "Priority": st.column_config.TextColumn(
+                                "Priority",
+                                help="Restocking priority level"
+                            ),
+                            "Recommendation": st.column_config.TextColumn(
+                                "Recommendation",
+                                help="Actionable restocking recommendation"
+                            )
+                        }
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
-                
-                # Insights
-                st.subheader("💡 Actionable Insights")
-                for insight in summary['insights']:
-                    st.info(insight)
-                
-                # Model accuracy
-                if summary['model_accuracy']:
-                    st.subheader("🎯 Model Accuracy")
-                    accuracy_color = "🟢" if summary['model_accuracy'] < 20 else "🟡" if summary['model_accuracy'] < 40 else "🔴"
-                    st.markdown(f"**MAPE**: {accuracy_color} {summary['model_accuracy']:.1f}%")
+                    # Summary metrics
+                    st.subheader("📋 Restocking Summary")
+                    high_priority = len(top_products_df[top_products_df['Priority'] == 'High'])
+                    medium_priority = len(top_products_df[top_products_df['Priority'] == 'Medium'])
+                    total_demand = top_products_df['Total_Forecasted_Demand'].sum()
                     
-                    if summary['model_accuracy'] < 20:
-                        st.success("Excellent forecast accuracy!")
-                    elif summary['model_accuracy'] < 40:
-                        st.warning("Moderate forecast accuracy. Consider using additional data.")
-                    else:
-                        st.error("Low forecast accuracy. Results should be used with caution.")
-            
-            else:
-                st.error("❌ Failed to generate forecast. This product may have insufficient data.")
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("🔴 High Priority", high_priority)
+                    with col2:
+                        st.metric("🟡 Medium Priority", medium_priority)
+                    with col3:
+                        st.metric("📦 Total Forecasted Demand", f"{total_demand:.0f}")
+                    with col4:
+                        st.metric("📊 Average Daily Demand", f"{top_products_df['Avg_Daily_Demand'].mean():.1f}")
+                    
+                    # Priority breakdown chart
+                    priority_counts = top_products_df['Priority'].value_counts()
+                    if len(priority_counts) > 0:
+                        fig = px.pie(
+                            values=priority_counts.values,
+                            names=priority_counts.index,
+                            title="Restocking Priority Distribution",
+                            color_discrete_map={
+                                'High': '#ff4444',
+                                'Medium': '#ffaa00', 
+                                'Low': '#44ff44',
+                                'Monitor': '#cccccc'
+                            }
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                else:
+                    st.error("❌ Failed to generate forecasts. Please check your data quality.")
+                    
+        # Clean up memory after analysis
+        cleanup_memory()
 
 def show_upload_page():
     """Display data upload page"""

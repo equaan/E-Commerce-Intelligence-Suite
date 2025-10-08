@@ -6,7 +6,8 @@ Handles data cleaning, validation, and transformation
 import pandas as pd
 import numpy as np
 from datetime import datetime
-import re
+import sqlite3
+import io
 
 class DataProcessor:
     def __init__(self):
@@ -15,6 +16,31 @@ class DataProcessor:
             'InvoiceNo', 'StockCode', 'Description', 
             'Quantity', 'InvoiceDate', 'UnitPrice', 'CustomerID'
         ]
+    
+    def read_csv_with_encoding_detection(self, file_path_or_buffer, **kwargs):
+        """
+        Read CSV file with automatic encoding detection
+        Supports both file paths and file-like objects (for Streamlit uploads)
+        """
+        encodings_to_try = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'utf-16']
+        
+        for encoding in encodings_to_try:
+            try:
+                # Reset file pointer if it's a file-like object
+                if hasattr(file_path_or_buffer, 'seek'):
+                    file_path_or_buffer.seek(0)
+                
+                df = pd.read_csv(file_path_or_buffer, encoding=encoding, **kwargs)
+                return df, encoding
+                
+            except UnicodeDecodeError:
+                continue
+            except Exception as e:
+                if encoding == encodings_to_try[-1]:  # Last encoding to try
+                    raise e
+                continue
+        
+        raise ValueError("Could not read file with any supported encoding")
     
     def validate_csv_schema(self, df):
         """Validate that uploaded CSV has required columns"""

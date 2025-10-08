@@ -9,6 +9,13 @@ from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import adfuller
 import warnings
+import sys
+import os
+
+# Add utils to path for cache manager
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
+from cache_manager import load_result, save_result, cleanup_memory
+
 warnings.filterwarnings('ignore')
 
 class InventoryForecaster:
@@ -87,6 +94,56 @@ class InventoryForecaster:
         
         return best_params, best_aic
     
+    def run_cached_forecast(self, df, product_id, forecast_days=30, data_hash=None):
+        """
+        Run ARIMA forecasting with caching support
+        
+        Args:
+            df: DataFrame with sales data
+            product_id: Product ID to forecast
+            forecast_days: Number of days to forecast
+            data_hash: Optional hash of the data for cache key
+            
+        Returns:
+            Tuple of (forecast_result, from_cache)
+        """
+        # Prepare data first
+        product_data = self.prepare_product_data(df, product_id)
+        if product_data is None:
+            return None, False
+        
+        # Create cache parameters
+        cache_params = {
+            'product_id': product_id,
+            'forecast_days': forecast_days,
+            'data_shape': product_data.shape,
+            'data_hash': data_hash or str(hash(str(product_data.values.tobytes()))),
+            'data_start': str(product_data.index.min()),
+            'data_end': str(product_data.index.max()),
+            'total_quantity': float(product_data['Quantity'].sum())
+        }
+        
+        # Try to load from cache
+        cached_result = load_result("arima_results", cache_params)
+        if cached_result is not None:
+            print(f"✅ Loaded ARIMA forecast for {product_id} from cache")
+            self.forecasts[product_id] = cached_result
+            return cached_result, True
+        
+        print(f"⚠️ Computing ARIMA forecast for {product_id}... Please wait.")
+        
+        # Run the forecast
+        forecast_result = self.train_arima_model(product_id, forecast_days)
+        
+        if forecast_result is not None:
+            # Save to cache
+            save_result("arima_results", cache_params, forecast_result)
+            
+            # Clean up memory
+            cleanup_memory()
+        
+        return forecast_result, False
+
     def train_arima_model(self, product_id, forecast_days=30):
         """
         Train ARIMA model for a specific product
@@ -284,6 +341,90 @@ class InventoryForecaster:
         
         print(f"✅ Completed forecasting for {len(results)} products")
         return results
+    
+    def get_top_forecasted_products(self, df, top_n=10, forecast_days=30):
+        """
+        Get top products by forecasted demand for restocking recommendations
+        
+        Args:
+            df: DataFrame with sales data
+            top_n: Number of top products to return
+            forecast_days: Number of days to forecast
+            
+        Returns:
+            DataFrame with top forecasted products and recommendations
+        """
+        print(f"📊 Analyzing top {top_n} products for demand forecasting...")
+        
+        # Get top products by historical sales
+        top_products = (df.groupby(['StockCode', 'Description'])['Quantity']
+                       .sum()
+                       .sort_values(ascending=False)
+                       .head(top_n * 2)  # Get more to account for failed forecasts
+                       .index.tolist())
+        
+        forecast_results = []
+        
+        for stock_code, description in top_products:
+            try:
+                # Run cached forecast
+                forecast_result, from_cache = self.run_cached_forecast(
+                    df, stock_code, forecast_days
+                )
+                
+                if forecast_result is not None:
+                    forecast = forecast_result['forecast']
+                    
+                    # Calculate metrics
+                    total_forecasted_demand = forecast.sum()
+                    avg_daily_demand = forecast.mean()
+                    peak_demand = forecast.max()
+                    demand_variability = forecast.std() / forecast.mean() if forecast.mean() > 0 else 0
+                    
+                    # Generate recommendation
+                    if avg_daily_demand > 5:
+                        if demand_variability > 0.3:
+                            recommendation = "🔴 High Priority - High demand with variability"
+                            priority = "High"
+                        else:
+                            recommendation = "🟡 Medium Priority - Steady high demand"
+                            priority = "Medium"
+                    elif avg_daily_demand > 2:
+                        recommendation = "🟢 Low Priority - Moderate demand"
+                        priority = "Low"
+                    else:
+                        recommendation = "⚪ Monitor - Low demand"
+                        priority = "Monitor"
+                    
+                    forecast_results.append({
+                        'StockCode': stock_code,
+                        'Description': description,
+                        'Total_Forecasted_Demand': round(total_forecasted_demand, 1),
+                        'Avg_Daily_Demand': round(avg_daily_demand, 1),
+                        'Peak_Demand': round(peak_demand, 1),
+                        'Demand_Variability': round(demand_variability, 2),
+                        'Priority': priority,
+                        'Recommendation': recommendation,
+                        'Forecast_Period_Days': forecast_days
+                    })
+                    
+                    if len(forecast_results) >= top_n:
+                        break
+                        
+            except Exception as e:
+                print(f"Error forecasting {stock_code}: {str(e)}")
+                continue
+        
+        # Convert to DataFrame and sort by total forecasted demand
+        if forecast_results:
+            results_df = pd.DataFrame(forecast_results)
+            results_df = results_df.sort_values('Total_Forecasted_Demand', ascending=False)
+            
+            print(f"✅ Generated forecasts for {len(results_df)} products")
+            return results_df
+        else:
+            print("❌ No successful forecasts generated")
+            return pd.DataFrame()
 
 if __name__ == "__main__":
     # Test inventory forecaster

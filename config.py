@@ -112,6 +112,17 @@ EXAMPLE CSV FORMAT:
 InvoiceNo,StockCode,Description,Quantity,InvoiceDate,UnitPrice,CustomerID,Country
 536365,85123A,WHITE HANGING HEART T-LIGHT HOLDER,6,2010-12-01 08:26:00,2.55,17850,United Kingdom
 536365,71053,WHITE METAL LANTERN,6,2010-12-01 08:26:00,3.39,17850,United Kingdom
+
+ENCODING SUPPORT:
+The system automatically detects and supports multiple encodings:
+- UTF-8 (recommended)
+- Latin-1 (ISO-8859-1)
+- CP1252 (Windows-1252)
+- UTF-16
+
+If you get encoding errors:
+1. Save your CSV as UTF-8 in Excel: File > Save As > CSV UTF-8
+2. Or use a text editor like Notepad++ to convert encoding
 """
 
 def get_csv_path():
