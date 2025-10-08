@@ -238,16 +238,60 @@ def show_cross_selling_page(data, products):
     min_confidence = st.sidebar.slider("Minimum Confidence", 0.1, 0.9, 0.1, 0.05)
     min_lift = st.sidebar.slider("Minimum Lift", 1.0, 5.0, 1.0, 0.1)
     
-    # Initialize market basket analyzer with caching
+    # Phase 4.1: Advanced optimization controls
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("⚡ Performance Settings")
+    
+    with st.sidebar.expander("🔧 Advanced Options"):
+        max_transactions = st.slider("Max Transactions", 1000, 50000, 10000, 1000,
+                                   help="Limit transactions for faster analysis")
+        max_products = st.slider("Max Products", 50, 1000, 200, 50,
+                                help="Analyze only top N most frequent products")
+        min_basket_size = st.slider("Min Basket Size", 1, 10, 2, 1,
+                                   help="Minimum items per transaction")
+        
+        if st.button("🔄 Apply Optimization Settings"):
+            st.session_state.optimization_updated = True
+    
+    # Initialize market basket analyzer with caching and custom optimization settings
     analyzer = MarketBasketAnalyzer(min_support, min_confidence, min_lift)
     
+    # Apply custom optimization settings if provided
+    if 'optimization_updated' in st.session_state or True:  # Always apply for now
+        analyzer.update_optimization_settings(
+            max_transactions=max_transactions,
+            max_products=max_products,
+            min_transaction_items=min_basket_size,
+            max_transaction_items=50  # Keep reasonable upper limit
+        )
+    
+    # Phase 4.1: Progressive loading with better UX
+    progress_placeholder = st.empty()
+    status_placeholder = st.empty()
+    
     with st.spinner("🔄 Running Market Basket Analysis..."):
+        # Show optimization settings
+        with st.expander("⚙️ Optimization Settings", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Max Transactions", analyzer.max_transactions)
+                st.metric("Max Products", analyzer.max_products)
+            with col2:
+                st.metric("Min Items/Transaction", analyzer.min_transaction_items)
+                st.metric("Max Items/Transaction", analyzer.max_transaction_items)
+        
+        # Run analysis with progress tracking
         frequent_itemsets, rules, from_cache = analyzer.run_cached_analysis(data)
         
         if from_cache:
-            st.info("✅ Loaded cached result")
+            st.success("✅ Loaded cached result - Analysis completed instantly!")
         else:
-            st.warning("⚠️ Recomputing model... Please wait.")
+            st.success("✅ Analysis completed with Phase 4.1 optimizations!")
+            
+            # Show performance summary
+            summary = analyzer.get_analysis_summary()
+            if summary:
+                st.info(f"📊 Processed {summary['total_transactions']} transactions with {summary['unique_products']} products")
     
     if frequent_itemsets is None or len(frequent_itemsets) == 0:
         st.error("Failed to generate frequent itemsets. Try lowering the minimum support.")
