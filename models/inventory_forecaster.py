@@ -78,9 +78,6 @@ class InventoryForecaster:
         if len(data) <= self.max_time_series_length:
             return data
         
-        print(f"⚡ Long time series detected ({len(data)} points)")
-        print(f"   Optimizing to {self.max_time_series_length} points for faster processing...")
-        
         # Keep recent data + sample from historical data
         recent_points = self.max_time_series_length // 2
         historical_points = self.max_time_series_length - recent_points
@@ -97,7 +94,6 @@ class InventoryForecaster:
         
         optimized_data = pd.concat([sampled_historical, recent_data]).sort_index()
         
-        print(f"   ✅ Optimized from {len(data)} to {len(optimized_data)} points")
         return optimized_data
     
     def _classify_product_complexity(self, product_data):
@@ -155,8 +151,6 @@ class InventoryForecaster:
         """Phase 5.1: Choose optimal forecasting model based on data characteristics"""
         complexity = self._classify_product_complexity(product_data)
         
-        print(f"📊 Product {product_id} classified as: {complexity}")
-        
         model_choice = {
             "insufficient_data": "moving_average",
             "simple": "moving_average", 
@@ -167,7 +161,6 @@ class InventoryForecaster:
         }
         
         selected_model = model_choice.get(complexity, "exponential_smoothing")
-        print(f"   Selected model: {selected_model}")
         
         return selected_model
     
@@ -253,16 +246,12 @@ class InventoryForecaster:
         model_type = self._choose_optimal_model(product_data, product_id)
         
         if model_type == "arima":
-            print(f"   Using ARIMA (high-value product)")
             return self.train_arima_model(product_id, forecast_days)
         elif model_type == "exponential_smoothing":
-            print(f"   Using Exponential Smoothing (10-50x faster)")
             return self._forecast_exponential_smoothing(product_data, forecast_days)
         elif model_type == "linear_trend":
-            print(f"   Using Linear Trend (100x faster)")
             return self._forecast_linear_trend(product_data, forecast_days)
         else:  # moving_average
-            print(f"   Using Moving Average (1000x faster)")
             return self._forecast_moving_average(product_data, forecast_days)
     
     def check_stationarity(self, series):
@@ -340,11 +329,8 @@ class InventoryForecaster:
         # Try to load from cache
         cached_result = load_result("arima_results", cache_params)
         if cached_result is not None:
-            print(f"✅ Loaded ARIMA forecast for {product_id} from cache")
             self.forecasts[product_id] = cached_result
             return cached_result, True
-        
-        print(f"⚠️ Computing optimized forecast for {product_id}... Please wait.")
         
         # Phase 5.1: Use optimized forecasting instead of always ARIMA
         forecast_result = self._forecast_optimized(product_data, product_id, forecast_days)
@@ -568,8 +554,6 @@ class InventoryForecaster:
         Returns:
             DataFrame with top forecasted products and recommendations
         """
-        print(f"📊 Analyzing top {top_n} products for demand forecasting...")
-        
         # Get top products by historical sales - handle both StockCode and ProductID
         product_col = 'StockCode' if 'StockCode' in df.columns else 'ProductID'
         top_products = (df.groupby([product_col, 'Description'])['Quantity']
@@ -580,21 +564,16 @@ class InventoryForecaster:
         
         # Phase 5.1: Use parallel processing for bulk forecasting
         if self.enable_parallel_processing and len(top_products) > 2:
-            print(f"⚡ Using parallel processing with {self.max_workers} workers...")
             forecast_results = self._forecast_products_parallel(df, top_products, forecast_days, top_n)
         else:
-            print(f"🔄 Using sequential processing...")
             forecast_results = self._forecast_products_sequential(df, top_products, forecast_days, top_n)
         
         # Convert to DataFrame and sort by total forecasted demand
         if forecast_results:
             results_df = pd.DataFrame(forecast_results)
             results_df = results_df.sort_values('Total_Forecasted_Demand', ascending=False)
-            
-            print(f"✅ Generated forecasts for {len(results_df)} products")
             return results_df
         else:
-            print("❌ No successful forecasts generated")
             return pd.DataFrame()
     
     def _forecast_products_sequential(self, df, top_products, forecast_days, top_n):
@@ -603,8 +582,6 @@ class InventoryForecaster:
         
         for i, (stock_code, description) in enumerate(top_products):
             try:
-                print(f"   Processing {i+1}/{len(top_products)}: {stock_code}")
-                
                 # Run cached forecast
                 forecast_result, from_cache = self.run_cached_forecast(
                     df, stock_code, forecast_days
@@ -621,7 +598,6 @@ class InventoryForecaster:
                         break
                         
             except Exception as e:
-                print(f"   Error forecasting {stock_code}: {str(e)}")
                 continue
         
         return forecast_results
@@ -649,17 +625,14 @@ class InventoryForecaster:
                         
                         if result:
                             forecast_results.append(result)
-                            print(f"   ✅ Completed {len(forecast_results)}/{min(top_n, len(tasks))}: {stock_code}")
                         
                         if len(forecast_results) >= top_n:
                             break
                             
                     except Exception as e:
-                        print(f"   ❌ Failed {future_to_product[future]}: {str(e)}")
                         continue
                         
         except Exception as e:
-            print(f"⚠️ Parallel processing failed: {str(e)}, falling back to sequential")
             return self._forecast_products_sequential(df, top_products, forecast_days, top_n)
         
         return forecast_results
@@ -682,7 +655,6 @@ class InventoryForecaster:
                     stock_code, description, forecast_result, forecast_days
                 )
         except Exception as e:
-            print(f"Worker error for {stock_code}: {str(e)}")
             return None
         
         return None
@@ -726,7 +698,6 @@ class InventoryForecaster:
                 'Model_Type': forecast_result.get('model_type', 'unknown')
             }
         except Exception as e:
-            print(f"Error processing forecast result for {stock_code}: {str(e)}")
             return None
 
 if __name__ == "__main__":

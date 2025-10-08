@@ -48,8 +48,6 @@ class MarketBasketAnalyzer:
         Args:
             df: DataFrame with columns ['InvoiceNo', 'Description']
         """
-        print(f"📊 Starting MBA preparation with {len(df)} records...")
-        
         # Phase 4.1 Optimization 1: Smart Sampling for large datasets
         optimized_df = self._optimize_dataset_size(df)
         
@@ -73,9 +71,15 @@ class MarketBasketAnalyzer:
         # Store the transaction data
         self.transaction_data = self.transaction_df
         
-        print(f"✅ Optimized to {len(transactions)} transactions with {len(te.columns_)} unique products")
-        print(f"📈 Data reduction: {len(df)} → {len(optimized_df)} records ({(1-len(optimized_df)/len(df))*100:.1f}% reduction)")
-        print(f"🔢 Binary matrix shape: {self.transaction_data.shape}")
+        # Store optimization stats for UI display (without printing)
+        self.optimization_stats = {
+            'total_transactions': len(transactions),
+            'unique_products': len(te.columns_),
+            'original_records': len(df),
+            'optimized_records': len(optimized_df),
+            'reduction_percentage': (1-len(optimized_df)/len(df))*100,
+            'matrix_shape': self.transaction_data.shape
+        }
         
         return self.transaction_data
     
@@ -87,20 +91,14 @@ class MarketBasketAnalyzer:
         unique_transactions = df['InvoiceNo'].nunique()
         
         if unique_transactions > max_transactions:
-            print(f"⚡ Large dataset detected ({unique_transactions} transactions)")
-            print(f"   Sampling to {max_transactions} transactions for faster analysis...")
-            
             # Sample transactions (not records) to maintain transaction integrity
             sample_transactions = df['InvoiceNo'].drop_duplicates().sample(
                 n=max_transactions, 
                 random_state=42
             )
             sampled_df = df[df['InvoiceNo'].isin(sample_transactions)]
-            
-            print(f"   ✅ Sampled {len(sampled_df)} records from {sample_transactions.nunique()} transactions")
             return sampled_df
         
-        print(f"📊 Dataset size OK ({unique_transactions} transactions)")
         return df
     
     def _filter_top_products(self, df, max_products=None):
@@ -111,17 +109,11 @@ class MarketBasketAnalyzer:
         unique_products = df['Description'].nunique()
         
         if unique_products > max_products:
-            print(f"🔍 Many products detected ({unique_products} unique products)")
-            print(f"   Filtering to top {max_products} most frequent products...")
-            
             # Get top products by frequency
             top_products = df['Description'].value_counts().head(max_products).index
             filtered_df = df[df['Description'].isin(top_products)]
-            
-            print(f"   ✅ Kept {len(filtered_df)} records with top {len(top_products)} products")
             return filtered_df
         
-        print(f"📦 Product count OK ({unique_products} unique products)")
         return df
     
     def _filter_meaningful_transactions(self, df, min_items=None, max_items=None):
@@ -131,8 +123,6 @@ class MarketBasketAnalyzer:
         if max_items is None:
             max_items = self.max_transaction_items
             
-        print(f"🧹 Filtering transaction quality (keeping {min_items}-{max_items} items per transaction)...")
-        
         # Calculate transaction sizes
         transaction_sizes = df.groupby('InvoiceNo').size()
         
@@ -143,10 +133,6 @@ class MarketBasketAnalyzer:
         
         filtered_df = df[df['InvoiceNo'].isin(valid_transactions)]
         
-        removed_transactions = len(transaction_sizes) - len(valid_transactions)
-        print(f"   ✅ Removed {removed_transactions} transactions (too small/large)")
-        print(f"   ✅ Kept {len(valid_transactions)} quality transactions")
-        
         return filtered_df
     
     def find_frequent_itemsets(self):
@@ -154,33 +140,20 @@ class MarketBasketAnalyzer:
         if self.transaction_data is None:
             raise ValueError("Transaction data not prepared. Call prepare_transactions first.")
         
-        print(f"🔍 Finding frequent itemsets (min_support={self.min_support})...")
-        print(f"   Analyzing {self.transaction_data.shape[0]} transactions × {self.transaction_data.shape[1]} products")
-        
-        # Apply Apriori algorithm
+        # Apply Apriori algorithm (silently)
         self.frequent_itemsets = apriori(
             self.transaction_data, 
             min_support=self.min_support, 
             use_colnames=True,
-            verbose=1  # Show progress
+            verbose=0  # Silent mode
         )
         
-        if len(self.frequent_itemsets) == 0:
-            print("⚠️ No frequent itemsets found. Try lowering min_support.")
-            return self.frequent_itemsets
-        
-        print(f"✅ Found {len(self.frequent_itemsets)} frequent itemsets")
         return self.frequent_itemsets
 
     def generate_association_rules(self):
         """Generate association rules from frequent itemsets"""
         if self.frequent_itemsets is None or len(self.frequent_itemsets) == 0:
-            print("❌ No frequent itemsets available for rule generation")
             return pd.DataFrame()
-        
-        print(f"📋 Generating association rules...")
-        print(f"   Min confidence: {self.min_confidence}")
-        print(f"   Min lift: {self.min_lift}")
         
         try:
             # Generate rules
@@ -194,7 +167,6 @@ class MarketBasketAnalyzer:
             self.rules = self.rules[self.rules['lift'] >= self.min_lift]
             
             if len(self.rules) == 0:
-                print("⚠️ No rules found with current thresholds")
                 return self.rules
             
             # Sort by lift descending
@@ -208,12 +180,9 @@ class MarketBasketAnalyzer:
                 lambda x: ', '.join(list(x))
             )
             
-            print(f"✅ Generated {len(self.rules)} association rules")
-            
             return self.rules
             
         except Exception as e:
-            print(f"❌ Error generating rules: {str(e)}")
             return pd.DataFrame()
 
     def run_cached_analysis(self, df, data_hash=None):
@@ -243,15 +212,12 @@ class MarketBasketAnalyzer:
         # Try to load from cache
         cached_result = load_result("mba_results", cache_params)
         if cached_result is not None:
-            print("✅ Loaded MBA results from cache")
             self.frequent_itemsets = cached_result['frequent_itemsets']
             self.rules = cached_result['rules']
             self.transaction_data = cached_result.get('transaction_data')
             return self.frequent_itemsets, self.rules, True
         
-        print("⚠️ Computing MBA analysis... Please wait.")
-        
-        # Run the analysis with optimizations
+        # Run the analysis with optimizations (silently)
         self.prepare_transactions(df)
         frequent_itemsets = self.find_frequent_itemsets()
         rules = self.generate_association_rules()
